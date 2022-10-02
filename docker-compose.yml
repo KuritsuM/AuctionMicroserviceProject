@@ -1,14 +1,31 @@
 version: '3'
 
 services:
-  database:
-    image: postgres:${POSTGRES_VERSION:-14}-alpine
+  pgadmin:
+    image: dpage/pgadmin4
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-app}
+      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
+      - PGADMIN_DEFAULT_PASSWORD=root
+    ports:
+      - "1515:15"
+
+  database_auction:
+    image: postgres:${POSTGRES_VERSION:-14}-alpine
+    container_name: database_auction
+    environment:
+      POSTGRES_DB: ${POSTGRES_AUCTION_DB:-auction_service}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-!ChangeMe!}
       POSTGRES_USER: ${POSTGRES_USER:-app}
-    volumes:
-      - db-data:/var/lib/postgresql/data:rw
+    command: postgres -c 'max_connections=250'
+
+  database_authentication:
+    image: postgres:${POSTGRES_VERSION:-14}-alpine
+    container_name: database_authentication
+    environment:
+      POSTGRES_DB: ${POSTGRES_AUTH_DB:-authentiaction_service}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-!ChangeMe!}
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+    command: postgres -c 'max_connections=250'
 
   nginx:
     image: nginx:stable-alpine
@@ -21,7 +38,6 @@ services:
     depends_on:
       - microservice_auction
       - microservice_authentication
-      - database
 
   redis:
     image: redis:7.0.5-alpine3.16
@@ -49,10 +65,9 @@ services:
       context: ./AuthenticationService/Docker
     volumes:
       - ./AuthenticationService:/var/www/OnlineAuction/AuthenticationService:rw
-      - ./Build/php_microservice:/var/www/scripts:rw
-    #command: /bin/sh /var/www/scripts/message_reader_script.sh
+      - ./AuthenticationService/Docker/supervisord.conf:/etc/supervisor/conf.d/supervisord.conf
     depends_on:
-      - database
+      - database_authentication
       - amqp
 
   microservice_auction:
@@ -61,11 +76,8 @@ services:
       context: ./AuctionService/Docker
     volumes:
       - ./AuctionService:/var/www/OnlineAuction/AuctionService:rw
-      - ./Build/php_microservice:/var/www/scripts:rw
-   # command: /bin/sh /var/www/scripts/message_reader_script.sh
+      - ./AuctionService/Docker/supervisord.conf:/etc/supervisor/conf.d/supervisord.conf
+    command: php-fpm
     depends_on:
-      - database
+      - database_auction
       - amqp
-
-volumes:
-  db-data:
